@@ -201,6 +201,8 @@
 -include_lib("webmachine/include/webmachine.hrl").
 -include("riak_kv_wm_raw.hrl").
 
+-define(DEFAULT_TIMEOUT, 60000).
+
 %% @spec init(proplist()) -> {ok, context()}
 %% @doc Initialize this resource.  This function extracts the
 %%      'prefix' and 'riak' properties from the dispatch args.
@@ -1142,7 +1144,13 @@ ensure_doc(Ctx) -> Ctx.
 %% @spec delete_resource(reqdata(), context()) -> {true, reqdata(), context()}
 %% @doc Delete the document specified.
 delete_resource(RD, Ctx=#ctx{bucket=B, key=K, client=C, rw=RW}) ->
-    case C:delete(B, K, RW) of
+    case wrq:get_req_header(?HEAD_VCLOCK, RD) of
+	undefined -> 
+	    Result = C:delete(B,K,RW);
+	_ -> 
+	    Result = C:delete(B,K,RW,?DEFAULT_TIMEOUT,decode_vclock_header(RD))
+    end,
+    case Result of
         {error, precommit_fail} ->
             {{halt, 403}, send_precommit_error(RD, undefined), Ctx};
         {error, {precommit_fail, Reason}} ->

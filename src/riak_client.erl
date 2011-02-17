@@ -33,7 +33,7 @@
 -export([mapred_dynamic_inputs_stream/3]).
 -export([get/2, get/3,get/4]).
 -export([put/1, put/2,put/3,put/4,put/5]).
--export([delete/2,delete/3,delete/4]).
+-export([delete/2,delete/3,delete/4,delete/5]).
 -export([list_keys/1,list_keys/2,list_keys/3]).
 -export([stream_list_keys/1,stream_list_keys/2,stream_list_keys/3,
          stream_list_keys/4,stream_list_keys/5]).
@@ -353,6 +353,12 @@ delete(Bucket,Key,RW,Timeout) ->
     Me = self(),
     ReqId = mk_reqid(),
     spawn(Node, riak_kv_delete, delete, [ReqId,Bucket,Key,RW,Timeout,Me]),
+    wait_for_reqid(ReqId, Timeout).
+
+delete(Bucket,Key,RW,Timeout,VClock) ->
+    Me = self(),
+    ReqId = mk_reqid(),
+    spawn(Node, riak_kv_delete, delete, [ReqId,Bucket,Key,RW,Timeout,Me,VClock]),
     wait_for_reqid(ReqId, Timeout).
 
 %% @spec list_keys(riak_object:bucket()) ->

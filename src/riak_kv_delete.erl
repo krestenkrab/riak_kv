@@ -25,6 +25,37 @@
 -module(riak_kv_delete).
 
 -export([delete/6]).
+-export([delete/7]).
+
+
+%% @spec delete(ReqId :: binary(), riak_object:bucket(), riak_object:key(),
+%%             RW :: integer(), TimeoutMillisecs :: integer(), Client :: pid(),
+%%             VClock :: vclock:vclock())
+%%           -> term()
+%% @doc Delete the object at Bucket/Key.  Direct return value is uninteresting,
+%%      see riak_client:delete/3 for expected gen_server replies to Client.
+delete(ReqId,Bucket,Key,RW0,Timeout,Client,VClock) ->           
+    RealStartTime = riak_core_util:moment(),
+    {ok, Ring} = riak_core_ring_manager:get_my_ring(),
+    BucketProps = riak_core_bucket:get_bucket(Bucket, Ring),
+    N = proplists:get_value(n_val,BucketProps),
+    RW = riak_kv_util:expand_rw_value(rw, RW0, BucketProps, N),
+    {ok,C} = riak:local_client(),
+    Obj0 = riak_object:new(Bucket,Key,<<>>),
+    Obj1 = riak_object:set_vclock(Obj0,vclock:increment(riak_client:get_client_id(Client), VClock)),
+    Obj2 = riak_object:update_metadata(Obj1,dict:from_list([{<<"X-Riak-Deleted">>, <<"true">>}])),
+
+    RemainingTime = Timeout - (riak_core_util:moment() - RealStartTime),
+    
+    Reply = C:put(Obj2, RW, RW, RemainingTime),
+    case Reply of
+	ok -> 
+	    spawn(
+	      fun()-> reap(Bucket,Key,RemainingTime) end);
+	_ -> nop
+    end,
+    Client ! {ReqId, Reply}.
+    
 
 %% @spec delete(ReqId :: binary(), riak_object:bucket(), riak_object:key(),
 %%             RW :: integer(), TimeoutMillisecs :: integer(), Client :: pid())
