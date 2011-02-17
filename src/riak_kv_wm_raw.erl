@@ -343,6 +343,13 @@ malformed_request(RD, Ctx) ->
         false ->
             DocCtx = ensure_doc(ResCtx),
             case DocCtx#ctx.doc of
+                {error, {deleted, _}} ->
+                    {{halt, 404},
+                     wrq:set_resp_header("Content-Type", "text/plain",
+                                         wrq:append_to_response_body(
+                                           io_lib:format("not found~n",[]),
+					 encode_vclock_header(ResRD, DocCtx))),
+                     DocCtx};
                 {error, notfound} ->
                     {{halt, 404},
                      wrq:set_resp_header("Content-Type", "text/plain",
@@ -530,6 +537,8 @@ charsets_provided(RD, Ctx0) ->
                 multiple_choices ->
                     {no_charset, RD, DocCtx}
             end;
+        {error, {deleted, _}} ->
+            {no_charset, RD, DocCtx};
         {error, notfound} ->
             {no_charset, RD, DocCtx};
         {error, timeout} ->
@@ -565,6 +574,8 @@ encodings_provided(RD, Ctx0) ->
                 multiple_choices ->
                     {default_encodings(), RD, DocCtx}
             end;
+        {error, {deleted, _}} ->
+            {default_encodings(), RD, DocCtx};
         {error, notfound} ->
             {default_encodings(), RD, DocCtx};
         {error, timeout} ->
@@ -646,6 +657,8 @@ resource_exists(RD, Ctx0) ->
             end;
         {error, notfound} ->
             {false, RD, DocCtx};
+        {error, {deleted, _}} ->
+            {false, encode_vclock_header(RD, DocCtx), DocCtx};
         {error, {r_val_unsatisfied, Requested, Given}} ->
             Msg = io_lib:format("R-value unsatisfied (got ~p of ~p)~n", [Given,Requested]),
             {{halt, 503}, wrq:append_to_response_body(Msg, RD), DocCtx};
@@ -1089,11 +1102,18 @@ select_doc(#ctx{doc={ok, Doc}, vtag=Vtag}) ->
 %% @doc Add the X-Riak-Vclock header to the response.
 encode_vclock_header(RD, #ctx{doc={ok, Doc}}) ->
     {Head, Val} = vclock_header(Doc),
+    wrq:set_resp_header(Head, Val, RD);
+encode_vclock_header(RD, #ctx{doc={error, {deleted, _}=Doc}}) ->
+    {Head, Val} = vclock_header(Doc),
     wrq:set_resp_header(Head, Val, RD).
 
-%% @spec vclock_header(riak_object()) -> {Name::string(), Value::string()}
+%% @spec vclock_header(riak_object() | {deleted, vclock:vclock}) -> {Name::string(), Value::string()}
 %% @doc Transform the Erlang representation of the document's vclock
 %%      into something suitable for an HTTP header
+vclock_header({deleted, VClock}) ->
+    {?HEAD_VCLOCK,
+     binary_to_list(
+       base64:encode(zlib:zip(term_to_binary(VClock))))};
 vclock_header(Doc) ->
     {?HEAD_VCLOCK,
      binary_to_list(

@@ -41,7 +41,7 @@
                 replied_fail :: list(),
                 repair_sent :: list(), 
                 final_obj :: undefined | {ok, riak_object:riak_object()} |
-                             tombstone | {error, notfound},
+                             {tombstone, vclock:vclock()} | {error, notfound},
                 timeout :: pos_integer(),
                 tref    :: reference(),
                 bkey :: {riak_object:bucket(), riak_object:key()},
@@ -190,7 +190,7 @@ really_finalize(StateData=#state{final_obj=Final,
                                  replied_notfound=NotFound,
                                  starttime=StartTime}) ->
     case Final of
-        tombstone ->
+        {tombstone,_} ->
             maybe_finalize_delete(StateData);
         {ok,_} ->
             maybe_do_read_repair(Sent,Final,RepliedR,NotFound,BKey,
@@ -265,8 +265,8 @@ merge(VResponses, AllowMult) ->
 respond(Client,R,VResponses,AllowMult,ReqId) ->
     Merged = merge(VResponses,AllowMult),
     case Merged of
-        tombstone ->
-            Reply = {error,notfound};
+        {tombstone,VClock} ->
+            Reply = {error, {deleted, VClock}};
         {ok, Obj} ->
             case riak_kv_util:is_x_deleted(Obj) of
                 true ->
@@ -291,10 +291,11 @@ merge_robjs([], _) ->
 merge_robjs(RObjs0,AllowMult) ->
     RObjs1 = [X || X <- [riak_kv_util:obj_not_deleted(O) ||
                             O <- RObjs0], X /= undefined],
+    RObj = riak_object:reconcile(RObjs0,AllowMult),
     case RObjs1 of
-        [] -> tombstone;
+        [] -> 
+            {tombstone, riak_object:vclock(RObj)};
         _ ->
-            RObj = riak_object:reconcile(RObjs0,AllowMult),
             {ok, RObj}
     end.
 

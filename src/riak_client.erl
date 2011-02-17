@@ -214,6 +214,7 @@ mapred_dynamic_inputs_stream(FSMPid, InputDef, Timeout) ->
 %% @spec get(riak_object:bucket(), riak_object:key()) ->
 %%       {ok, riak_object:riak_object()} |
 %%       {error, notfound} |
+%%       {error, {deleted, vclock:vclock()}} |
 %%       {error, timeout} |
 %%       {error, {n_val_violation, N::integer()}} |
 %%       {error, {r_val_unsatisfied, R::integer(), Replies::integer()}} |
@@ -226,6 +227,7 @@ get(Bucket, Key) -> get(Bucket, Key, default, ?DEFAULT_TIMEOUT).
 %% @spec get(riak_object:bucket(), riak_object:key(), R :: integer()) ->
 %%       {ok, riak_object:riak_object()} |
 %%       {error, notfound} |
+%%       {error, {deleted, vclock:vclock()}} |
 %%       {error, timeout} |
 %%       {error, {n_val_violation, N::integer()}} |
 %%       {error, {r_val_unsatisfied, R::integer(), Replies::integer()}} |
@@ -239,6 +241,7 @@ get(Bucket, Key, R) -> get(Bucket, Key, R, ?DEFAULT_TIMEOUT).
 %%           TimeoutMillisecs :: integer()) ->
 %%       {ok, riak_object:riak_object()} |
 %%       {error, notfound} |
+%%       {error, {deleted, vclock:vclock()}} |
 %%       {error, timeout} |
 %%       {error, {n_val_violation, N::integer()}} |
 %%       {error, {r_val_unsatisfied, R::integer(), Replies::integer()}} |
